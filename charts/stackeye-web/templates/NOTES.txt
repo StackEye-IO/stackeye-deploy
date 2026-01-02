@@ -1,0 +1,50 @@
+StackEye Web Dashboard has been deployed!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  https://{{ $host.host }}
+{{- end }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  kubectl port-forward svc/{{ include "stackeye-web.fullname" . }} 3000:{{ .Values.service.port }}
+  Then visit: http://localhost:3000
+{{- end }}
+
+2. Check the deployment status:
+  kubectl get pods -l "app.kubernetes.io/name={{ include "stackeye-web.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+3. View logs:
+  kubectl logs -l "app.kubernetes.io/name={{ include "stackeye-web.name" . }}" -f
+
+4. Health endpoint:
+  /api/health
+
+{{- if .Values.auth0.enabled }}
+
+5. Auth0 Configuration:
+  Domain: {{ .Values.auth0.domain }}
+  Client ID: {{ .Values.auth0.clientId }}
+  Base URL: {{ .Values.auth0.baseUrl }}
+{{- end }}
+
+{{- if not .Values.sealedSecrets.enabled }}
+
+⚠️  WARNING: You are using plain Kubernetes Secrets.
+    For production, enable Sealed Secrets:
+
+    1. Create a sealed secret:
+       kubectl create secret generic {{ include "stackeye-web.fullname" . }}-secrets \
+         --from-literal=AUTH0_SECRET='$(openssl rand -hex 32)' \
+         --from-literal=AUTH0_CLIENT_SECRET='...' \
+         --dry-run=client -o yaml | kubeseal --format yaml
+
+    2. Update values.yaml:
+       sealedSecrets:
+         enabled: true
+         encryptedData:
+           AUTH0_SECRET: <encrypted-value>
+           AUTH0_CLIENT_SECRET: <encrypted-value>
+{{- end }}
+
+NOTE: NEXT_PUBLIC_* environment variables are set at Docker image build time.
+If you need different values, rebuild the image with different --build-arg values.

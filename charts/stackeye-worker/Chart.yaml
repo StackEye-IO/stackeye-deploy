@@ -1,0 +1,21 @@
+apiVersion: v2
+name: stackeye-worker
+description: StackEye Probe Worker - executes uptime monitoring checks
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - stackeye
+  - monitoring
+  - worker
+  - probes
+home: https://github.com/StackEye-IO/stackeye
+sources:
+  - https://github.com/StackEye-IO/stackeye
+maintainers:
+  - name: StackEye Team
+    email: team@stackeye.io
+dependencies:
+  - name: stackeye-common
+    version: ">=0.1.0"
+    repository: "file://../../library/stackeye-common"

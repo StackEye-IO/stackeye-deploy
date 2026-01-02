@@ -1,0 +1,36 @@
+# Production environment values for stackeye-worker
+
+mode: multi-region
+replicaCount: 2
+
+regions:
+  - id: nyc3
+    name: "New York"
+    enabled: true
+    replicaCount: 3
+  - id: sfo3
+    name: "San Francisco"
+    enabled: true
+    replicaCount: 3
+  - id: chi1
+    name: "Chicago"
+    enabled: true
+    replicaCount: 3
+
+worker:
+  concurrency: 15
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+config:
+  logLevel: "info"
+
+sealedSecrets:
+  enabled: true
+  encryptedData: {}

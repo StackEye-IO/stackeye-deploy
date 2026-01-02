@@ -1,0 +1,27 @@
+# Staging environment values for stackeye-api
+
+replicaCount: 2
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+
+config:
+  logLevel: "info"
+  dashboardURL: "https://app.staging.stackeye.io"
+
+ingress:
+  hosts:
+    - host: api.staging.stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stackeye-api-staging-tls
+      hosts:
+        - api.staging.stackeye.io
+
+sealedSecrets:
+  enabled: true
+  encryptedData: {}

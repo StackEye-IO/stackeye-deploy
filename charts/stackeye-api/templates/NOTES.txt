@@ -1,0 +1,41 @@
+StackEye API has been deployed!
+
+1. Get the application URL:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  https://{{ $host.host }}
+{{- end }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  kubectl port-forward svc/{{ include "stackeye-api.fullname" . }} 8080:{{ .Values.service.port }}
+  Then visit: http://localhost:8080
+{{- end }}
+
+2. Check the deployment status:
+  kubectl get pods -l "app.kubernetes.io/name={{ include "stackeye-api.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+3. View logs:
+  kubectl logs -l "app.kubernetes.io/name={{ include "stackeye-api.name" . }}" -f
+
+4. Health endpoints:
+  - Liveness:  /health
+  - Readiness: /ready
+  - Metrics:   /metrics
+
+{{- if not .Values.sealedSecrets.enabled }}
+
+⚠️  WARNING: You are using plain Kubernetes Secrets.
+    For production, enable Sealed Secrets:
+
+    1. Create a sealed secret:
+       kubectl create secret generic {{ include "stackeye-api.fullname" . }}-secrets \
+         --from-literal=DATABASE_URL='...' \
+         --from-literal=JWT_SECRET='...' \
+         --dry-run=client -o yaml | kubeseal --format yaml
+
+    2. Update values.yaml:
+       sealedSecrets:
+         enabled: true
+         encryptedData:
+           DATABASE_URL: <encrypted-value>
+           JWT_SECRET: <encrypted-value>
+{{- end }}

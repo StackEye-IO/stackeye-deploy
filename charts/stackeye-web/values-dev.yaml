@@ -1,0 +1,37 @@
+# Development environment values for stackeye-web
+
+replicaCount: 1
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+auth0:
+  enabled: true
+  domain: "stackeye-dev.auth0.com"
+  clientId: ""
+  baseUrl: "https://app.dev.stackeye.io"
+
+ingress:
+  hosts:
+    - host: app.dev.stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stackeye-web-dev-tls
+      hosts:
+        - app.dev.stackeye.io
+
+sealedSecrets:
+  enabled: false

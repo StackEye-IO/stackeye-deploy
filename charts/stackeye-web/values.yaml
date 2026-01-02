@@ -1,0 +1,154 @@
+# Default values for stackeye-web
+# This is a YAML-formatted file.
+
+# -- Number of web dashboard replicas
+replicaCount: 2
+
+image:
+  # -- Container image repository
+  repository: harbor.support.tools/stackeye/web
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+
+imagePullSecrets:
+  - name: harbor-credentials
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Service account annotations
+  annotations: {}
+  # -- Service account name
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 1001
+  capabilities:
+    drop:
+      - ALL
+
+service:
+  type: ClusterIP
+  port: 3000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: app.stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stackeye-web-tls
+      hosts:
+        - app.stackeye.io
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# -- HPA configuration
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# -- Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - stackeye-web
+          topologyKey: kubernetes.io/hostname
+
+# -- Health probes
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 15
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# -- Graceful shutdown timeout
+terminationGracePeriodSeconds: 30
+
+# -- ConfigMap for runtime environment variables
+# Note: NEXT_PUBLIC_* vars are build-time only and set via --build-arg
+config:
+  nodeEnv: "production"
+
+# -- Auth0 SDK configuration (server-side runtime)
+auth0:
+  enabled: true
+  # Domain and client IDs from ConfigMap, secrets from SealedSecret
+  domain: ""
+  clientId: ""
+  audience: "https://api.stackeye.io"
+  scope: "openid profile email"
+  baseUrl: "https://app.stackeye.io"
+
+# -- Sealed Secrets configuration
+sealedSecrets:
+  enabled: true
+  encryptedData: {}
+
+# -- Build-time public environment variables
+# These are set during Docker image build, not at runtime
+# Included here for documentation purposes
+buildArgs:
+  NEXT_PUBLIC_API_URL: "https://api.stackeye.io"
+  NEXT_PUBLIC_APP_URL: "https://app.stackeye.io"

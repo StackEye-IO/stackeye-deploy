@@ -1,0 +1,168 @@
+{{- if eq .Values.mode "single" }}
+# Single-region worker deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stackeye-worker.fullname" . }}
+  labels:
+    {{- include "stackeye-worker.labels" . | nindent 4 }}
+    stackeye.io/region: {{ .Values.worker.region }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "stackeye-worker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "stackeye-worker.selectorLabels" . | nindent 8 }}
+        stackeye.io/region: {{ .Values.worker.region }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stackeye-worker.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "stackeye-worker.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "stackeye-worker.fullname" . }}-config
+            - secretRef:
+                name: {{ include "stackeye-worker.fullname" . }}-secrets
+          env:
+            - name: WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WORKER_REGION
+              value: {{ .Values.worker.region | quote }}
+            - name: WORKER_TICKER_INTERVAL
+              value: {{ .Values.worker.tickerInterval | quote }}
+            - name: WORKER_CONCURRENCY
+              value: {{ .Values.worker.concurrency | quote }}
+            - name: WORKER_SHUTDOWN_TIMEOUT
+              value: {{ .Values.worker.shutdownTimeout | quote }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+
+{{- if eq .Values.mode "multi-region" }}
+# Multi-region worker deployments
+{{- range .Values.regions }}
+{{- if .enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "stackeye-worker.fullname" $ }}-{{ .id }}
+  labels:
+    {{- include "stackeye-worker.labels" $ | nindent 4 }}
+    stackeye.io/region: {{ .id }}
+spec:
+  replicas: {{ .replicaCount | default $.Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "stackeye-worker.selectorLabels" $ | nindent 6 }}
+      stackeye.io/region: {{ .id }}
+  template:
+    metadata:
+      annotations:
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "stackeye-worker.selectorLabels" $ | nindent 8 }}
+        stackeye.io/region: {{ .id }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stackeye-worker.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      terminationGracePeriodSeconds: {{ $.Values.terminationGracePeriodSeconds }}
+      containers:
+        - name: worker
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+          image: {{ include "stackeye-worker.image" $ }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "stackeye-worker.fullname" $ }}-config
+            - secretRef:
+                name: {{ include "stackeye-worker.fullname" $ }}-secrets
+          env:
+            - name: WORKER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: WORKER_REGION
+              value: {{ .id | quote }}
+            - name: WORKER_TICKER_INTERVAL
+              value: {{ $.Values.worker.tickerInterval | quote }}
+            - name: WORKER_CONCURRENCY
+              value: {{ $.Values.worker.concurrency | quote }}
+            - name: WORKER_SHUTDOWN_TIMEOUT
+              value: {{ $.Values.worker.shutdownTimeout | quote }}
+          livenessProbe:
+            {{- toYaml $.Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml $.Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

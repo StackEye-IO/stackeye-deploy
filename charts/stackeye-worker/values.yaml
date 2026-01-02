@@ -1,0 +1,154 @@
+# Default values for stackeye-worker
+# This is a YAML-formatted file.
+
+# -- Worker deployment mode: "single" or "multi-region"
+mode: single
+
+# -- Number of worker replicas (per region in multi-region mode)
+replicaCount: 2
+
+# -- Multi-region configuration (used when mode=multi-region)
+regions:
+  - id: nyc3
+    name: "New York"
+    enabled: true
+    replicaCount: 2
+  - id: sfo3
+    name: "San Francisco"
+    enabled: true
+    replicaCount: 2
+  - id: chi1
+    name: "Chicago"
+    enabled: true
+    replicaCount: 2
+
+image:
+  # -- Container image repository
+  repository: harbor.support.tools/stackeye/worker
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+
+imagePullSecrets:
+  - name: harbor-credentials
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Service account annotations
+  annotations: {}
+  # -- Service account name
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  capabilities:
+    drop:
+      - ALL
+
+# -- Worker configuration
+worker:
+  # -- Worker ID prefix (suffixed with pod name)
+  idPrefix: "worker"
+  # -- Worker region (for single mode)
+  region: "us-east"
+  # -- Ticker interval for probe scheduling
+  tickerInterval: "10s"
+  # -- Maximum concurrent probe executions
+  concurrency: 10
+  # -- Graceful shutdown timeout
+  shutdownTimeout: "30s"
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# -- No HPA by default for workers (scale via replicas per region)
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - stackeye-worker
+          topologyKey: kubernetes.io/hostname
+
+# -- Health probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# -- Graceful shutdown for in-flight probes
+terminationGracePeriodSeconds: 35
+
+# -- ConfigMap values
+config:
+  logLevel: "info"
+  logFormat: "json"
+  databaseMaxOpenConns: "10"
+  databaseMaxIdleConns: "3"
+  databaseConnMaxLifetime: "5m"
+
+# -- Sealed Secrets configuration
+sealedSecrets:
+  enabled: true
+  encryptedData: {}
+
+# -- ServiceMonitor for Prometheus
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels: {}
