@@ -1,25 +1,30 @@
-# Helmfile for StackEye deployment
+# Helmfile for StackEye deployment (for local development/testing only)
+#
+# NOTE: Production deployments use ArgoCD GitOps from stackeye-gitops repo.
+# This helmfile is provided for local development and chart testing.
+#
 # Usage:
 #   helmfile -e dev apply     # Deploy to development
 #   helmfile -e staging apply # Deploy to staging
 #   helmfile -e prod apply    # Deploy to production
+#
+# Web Frontend:
+#   Web is deployed to Cloudflare Pages, not Kubernetes.
+#   See: https://github.com/StackEye-IO/stackeye-web
 
 environments:
   dev:
     values:
       - namespace: stackeye-dev
       - apiHost: api.dev.stackeye.io
-      - webHost: app.dev.stackeye.io
   staging:
     values:
       - namespace: stackeye-staging
       - apiHost: api.staging.stackeye.io
-      - webHost: app.staging.stackeye.io
   prod:
     values:
       - namespace: stackeye
       - apiHost: api.stackeye.io
-      - webHost: app.stackeye.io
 
 ---
 
@@ -29,7 +34,6 @@ releases:
     chart: ./charts/stackeye-api
     values:
       - charts/stackeye-api/values.yaml
-      - charts/stackeye-api/values-{{ .Environment.Name }}.yaml
     set:
       - name: ingress.hosts[0].host
         value: {{ .Environment.Values.apiHost }}
@@ -41,16 +45,3 @@ releases:
     chart: ./charts/stackeye-worker
     values:
       - charts/stackeye-worker/values.yaml
-      - charts/stackeye-worker/values-{{ .Environment.Name }}.yaml
-
-  - name: stackeye-web
-    namespace: {{ .Environment.Values.namespace }}
-    chart: ./charts/stackeye-web
-    values:
-      - charts/stackeye-web/values.yaml
-      - charts/stackeye-web/values-{{ .Environment.Name }}.yaml
-    set:
-      - name: ingress.hosts[0].host
-        value: {{ .Environment.Values.webHost }}
-      - name: ingress.tls[0].hosts[0]
-        value: {{ .Environment.Values.webHost }}

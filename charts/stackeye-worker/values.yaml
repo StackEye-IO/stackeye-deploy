@@ -1,13 +1,25 @@
 # Default values for stackeye-worker
 # This is a YAML-formatted file.
+#
+# Multi-Cluster Deployment:
+# Workers deploy to remote DOKS clusters (nyc3, sfo3) and connect to
+# on-prem PostgreSQL/Valkey via Tailscale VPN. Each cluster gets its own
+# worker deployment with unique region configuration.
+#
+# ArgoCD deploys this chart to each DOKS cluster with region-specific values:
+#   stackeye-worker-nyc3: worker.region=nyc3, worker.regionName="New York"
+#   stackeye-worker-sfo3: worker.region=sfo3, worker.regionName="San Francisco"
 
 # -- Worker deployment mode: "single" or "multi-region"
+# Use "single" for ArgoCD multi-cluster deployment (one chart per cluster)
+# Use "multi-region" for single-cluster deployment with multiple regions
 mode: single
 
-# -- Number of worker replicas (per region in multi-region mode)
+# -- Number of worker replicas
 replicaCount: 2
 
-# -- Multi-region configuration (used when mode=multi-region)
+# -- Multi-region configuration (only used when mode=multi-region)
+# Note: Prefer ArgoCD multi-cluster deployment over this mode
 regions:
   - id: nyc3
     name: "New York"
@@ -17,17 +29,13 @@ regions:
     name: "San Francisco"
     enabled: true
     replicaCount: 2
-  - id: chi1
-    name: "Chicago"
-    enabled: true
-    replicaCount: 2
 
 image:
   # -- Container image repository
   repository: harbor.support.tools/stackeye/worker
   # -- Image pull policy
   pullPolicy: IfNotPresent
-  # -- Image tag (defaults to chart appVersion)
+  # -- Image tag (defaults to chart appVersion, overridden by GitOps)
   tag: ""
 
 imagePullSecrets:
@@ -70,8 +78,12 @@ securityContext:
 worker:
   # -- Worker ID prefix (suffixed with pod name)
   idPrefix: "worker"
-  # -- Worker region (for single mode)
-  region: "us-east"
+  # -- Worker region ID (short code: nyc3, sfo3, etc.)
+  # Set per-cluster via ArgoCD Application values
+  region: "nyc3"
+  # -- Worker region display name ("New York", "San Francisco", etc.)
+  # Set per-cluster via ArgoCD Application values
+  regionName: "New York"
   # -- Ticker interval for probe scheduling
   tickerInterval: "10s"
   # -- Maximum concurrent probe executions
@@ -87,7 +99,7 @@ resources:
     cpu: 100m
     memory: 128Mi
 
-# -- No HPA by default for workers (scale via replicas per region)
+# -- No HPA by default for workers (scale via replicas)
 autoscaling:
   enabled: false
   minReplicas: 2
@@ -134,14 +146,17 @@ readinessProbe:
 terminationGracePeriodSeconds: 35
 
 # -- ConfigMap values
+# Database connection uses Tailscale IP to reach on-prem PostgreSQL
 config:
   logLevel: "info"
   logFormat: "json"
+  # Database connection pooling
   databaseMaxOpenConns: "10"
   databaseMaxIdleConns: "3"
   databaseConnMaxLifetime: "5m"
 
 # -- Sealed Secrets configuration
+# DATABASE_URL should use Tailscale IP: postgres://user:pass@100.x.x.x:5432/db
 sealedSecrets:
   enabled: true
   encryptedData: {}
