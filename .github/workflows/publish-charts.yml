@@ -7,8 +7,9 @@ on:
     paths:
       - 'charts/**'
       - 'library/**'
-  release:
-    types: [published]
+  # Note: Chart versions are decoupled from app versions.
+  # Charts are only published when chart templates/values change.
+  # App deployments use ArgoCD GitOps with image.tag overrides.
 
 env:
   REGISTRY: harbor.support.tools
