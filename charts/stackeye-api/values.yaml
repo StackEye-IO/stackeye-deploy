@@ -168,6 +168,21 @@ sealedSecrets:
   # These are placeholders - replace with actual sealed values
   encryptedData: {}
 
+# -- Secrets configuration
+secrets:
+  # -- Use an existing secret instead of creating one
+  # When set, sealedSecrets and inline secret values are ignored
+  existingSecretName: ""
+  # -- Inline secret values (only used when existingSecretName is empty and sealedSecrets.enabled is false)
+  databaseUrl: ""
+  jwtSecret: ""
+  redisUrl: ""
+  stripeSecretKey: ""
+  stripeWebhookSecret: ""
+  stripePublishableKey: ""
+  emailApiKey: ""
+  auth0ClientSecret: ""
+
 # -- Auth0 configuration
 auth0:
   enabled: false

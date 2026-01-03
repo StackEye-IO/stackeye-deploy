@@ -43,7 +43,7 @@ spec:
             - configMapRef:
                 name: {{ include "stackeye-api.fullname" . }}-config
             - secretRef:
-                name: {{ include "stackeye-api.fullname" . }}-secrets
+                name: {{ .Values.secrets.existingSecretName | default (printf "%s-secrets" (include "stackeye-api.fullname" .)) }}
           env:
             - name: POD_NAME
               valueFrom:
