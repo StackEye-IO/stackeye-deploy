@@ -14,7 +14,7 @@ on:
 
 env:
   REGISTRY: harbor.support.tools
-  REGISTRY_PATH: stackeye/charts
+  REGISTRY_PATH: stackeye-io/charts
 
 jobs:
   publish:
