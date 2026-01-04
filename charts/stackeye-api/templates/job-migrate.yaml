@@ -7,8 +7,8 @@ metadata:
     {{- include "stackeye-api.labels" . | nindent 4 }}
     app.kubernetes.io/component: migration
   annotations:
-    # Pre-upgrade hook runs before resources are updated
-    helm.sh/hook: pre-upgrade
+    # Run before resources are created/updated
+    helm.sh/hook: pre-install,pre-upgrade
     # Weight -5 ensures migration runs AFTER backup (which is weight -10)
     helm.sh/hook-weight: "-5"
     # Delete old jobs before creating new ones; keep failed jobs for debugging
