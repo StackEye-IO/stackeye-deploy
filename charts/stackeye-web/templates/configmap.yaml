@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "stackeye-web.fullname" . }}-config
+  labels:
+    {{- include "stackeye-web.labels" . | nindent 4 }}
+data:
+  # Backend API URL for server-side API proxy
+  BACKEND_API_URL: {{ .Values.config.backendApiUrl | quote }}
+  # App base URL for Auth0 callbacks
+  APP_BASE_URL: {{ .Values.config.appBaseUrl | quote }}
+  # Auth0 configuration (non-sensitive)
+  {{- if .Values.config.auth0Domain }}
+  AUTH0_DOMAIN: {{ .Values.config.auth0Domain | quote }}
+  {{- end }}
+  {{- if .Values.config.auth0ClientId }}
+  AUTH0_CLIENT_ID: {{ .Values.config.auth0ClientId | quote }}
+  {{- end }}
+  {{- if .Values.config.auth0Audience }}
+  AUTH0_AUDIENCE: {{ .Values.config.auth0Audience | quote }}
+  {{- end }}

@@ -1,0 +1,60 @@
+# Production environment values for stackeye-web
+
+replicaCount: 3
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+ingress:
+  hosts:
+    - host: stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: www.stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stackeye-web-prod-tls
+      hosts:
+        - stackeye.io
+        - www.stackeye.io
+
+config:
+  backendApiUrl: "http://stackeye-api.stackeye-prd.svc.cluster.local:8080"
+  appBaseUrl: "https://stackeye.io"
+  auth0Domain: ""
+  auth0ClientId: ""
+  auth0Audience: ""
+
+secrets:
+  existingSecretName: "stackeye-web-secrets"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - stackeye-web
+          topologyKey: kubernetes.io/hostname

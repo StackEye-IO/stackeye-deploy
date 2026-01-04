@@ -1,0 +1,31 @@
+# Staging environment values for stackeye-web
+
+replicaCount: 2
+
+ingress:
+  hosts:
+    - host: staging.stackeye.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: stackeye-web-staging-tls
+      hosts:
+        - staging.stackeye.io
+
+config:
+  backendApiUrl: "http://stackeye-api.stackeye-stg.svc.cluster.local:8080"
+  appBaseUrl: "https://staging.stackeye.io"
+  auth0Domain: ""
+  auth0ClientId: ""
+  auth0Audience: ""
+
+secrets:
+  existingSecretName: "stackeye-web-secrets"
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
