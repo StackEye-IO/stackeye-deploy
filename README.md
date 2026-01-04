@@ -1,212 +1,165 @@
 # StackEye Deploy
 
-Kubernetes Helm charts for StackEye uptime monitoring platform deployment.
+Infrastructure manifests for StackEye uptime monitoring platform.
+
+## Purpose
+
+This repository contains **infrastructure-only** manifests for StackEye. Application Helm charts have been migrated to their respective repositories and are deployed via CI pipelines.
+
+| What | Where |
+|------|-------|
+| API + Worker Helm charts | [stackeye/deploy/charts/](https://github.com/StackEye-IO/stackeye) |
+| Web Helm chart | [stackeye-web/deploy/charts/](https://github.com/StackEye-IO/stackeye-web) |
+| Infrastructure manifests | **This repo** (`infrastructure/`) |
 
 ## Architecture
 
 ```
-                    ┌─────────────────────────────────┐
-                    │       Cloudflare Pages          │
-                    │     (Web Frontend - Free)       │
-                    │      app.stackeye.io            │
-                    └───────────────┬─────────────────┘
-                                    │ API calls
-                                    ▼
-┌───────────────────────────────────────────────────────────────────┐
-│                     a1-ops-prd (On-Prem - Free)                   │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌──────────┐ │
-│  │   ArgoCD    │  │  API Server │  │    CNPG     │  │  Valkey  │ │
-│  │ (multi-     │  │ api.stack-  │  │ PostgreSQL  │  │  Cache   │ │
-│  │  cluster)   │  │  eye.io     │  │             │  │          │ │
-│  └──────┬──────┘  └─────────────┘  └─────────────┘  └──────────┘ │
-│         │ manages                                                 │
-└─────────┼─────────────────────────────────────────────────────────┘
-          │
-    ┌─────┴─────────────────────────────┐
-    │                                   │
-    ▼                                   ▼
-┌─────────────────────┐     ┌─────────────────────┐
-│  stackeye-nyc3      │     │  stackeye-sfo3      │
-│  DOKS ($64/mo)      │     │  DOKS ($64/mo)      │
-│  ┌───────────────┐  │     │  ┌───────────────┐  │
-│  │    Workers    │  │     │  │    Workers    │  │
-│  │  (East Coast) │  │     │  │  (West Coast) │  │
-│  │   region=nyc3 │  │     │  │   region=sfo3 │  │
-│  └───────────────┘  │     │  └───────────────┘  │
-└─────────────────────┘     └─────────────────────┘
-
-Network: Workers connect to on-prem DB via Tailscale VPN
+┌─────────────────────────────────────────────────────────────────────┐
+│                     a1-ops-prd (On-Prem)                            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌────────────┐ │
+│  │    CNPG     │  │   Valkey    │  │ Monitoring  │  │  API + Web │ │
+│  │ PostgreSQL  │  │   (Redis)   │  │ Prometheus  │  │  (Helm)    │ │
+│  └─────────────┘  └─────────────┘  │  Grafana    │  └────────────┘ │
+│                                     └─────────────┘                  │
+└─────────────────────────────────────────────────────────────────────┘
+         ▲                                      ▲
+         │ Tailscale Mesh                       │
+         │                                      │
+┌────────┴────────┐                   ┌────────┴────────┐
+│   DOKS NYC3     │                   │   DOKS SFO3     │
+│  ┌───────────┐  │                   │  ┌───────────┐  │
+│  │ Tailscale │  │                   │  │ Tailscale │  │
+│  │ Connector │  │                   │  │ Connector │  │
+│  └───────────┘  │                   │  └───────────┘  │
+│  ┌───────────┐  │                   │  ┌───────────┐  │
+│  │  Worker   │  │                   │  │  Worker   │  │
+│  │ (Probes)  │  │                   │  │ (Probes)  │  │
+│  └───────────┘  │                   │  └───────────┘  │
+└─────────────────┘                   └─────────────────┘
 ```
-
-## Charts
-
-| Chart | Description | Deploys To |
-|-------|-------------|------------|
-| `stackeye-api` | API server - REST API for probe management and alerting | On-prem (a1-ops-prd) |
-| `stackeye-worker` | Probe worker - executes uptime monitoring checks | DOKS (nyc3, sfo3) |
-
-**Note**: Web frontend is deployed to Cloudflare Pages (not Kubernetes).
 
 ## Repository Structure
 
 ```
 stackeye-deploy/
-├── charts/
-│   ├── stackeye-api/       # API server Helm chart
-│   └── stackeye-worker/    # Worker Helm chart
-├── library/
-│   └── stackeye-common/    # Shared template library
-├── .github/workflows/      # CI/CD pipelines
-├── ct.yaml                 # Chart testing config
-└── Makefile                # Common commands
+├── infrastructure/         # Infrastructure manifests
+│   ├── cnpg/               # CloudNativePG PostgreSQL clusters
+│   ├── valkey/             # Valkey (Redis) cache
+│   ├── monitoring/         # Prometheus + Grafana
+│   ├── tailscale/          # Tailscale connectors (NYC3, SFO3)
+│   ├── secrets/            # Sealed secrets per cluster
+│   └── README.md           # Detailed infrastructure docs
+├── scripts/
+│   └── deploy-infra.sh     # Infrastructure deployment script
+└── .github/workflows/      # CI pipelines (if any)
 ```
 
-## Deployment via ArgoCD
+## Quick Start
 
-Charts are deployed via ArgoCD GitOps from [stackeye-gitops](https://github.com/StackEye-IO/stackeye-gitops).
+Deploy infrastructure using the provided script:
 
-### Chart Publishing
+```bash
+# Deploy all infrastructure to dev on on-prem
+./scripts/deploy-infra.sh dev onprem all
 
-Charts are automatically published to Harbor OCI registry when chart files change:
+# Deploy specific component
+./scripts/deploy-infra.sh dev onprem cnpg
 
+# Deploy Tailscale to regional cluster
+./scripts/deploy-infra.sh dev nyc3 tailscale
+
+# Dry-run mode
+DRY_RUN=true ./scripts/deploy-infra.sh prd onprem all
 ```
-oci://harbor.support.tools/stackeye/charts/stackeye-api
-oci://harbor.support.tools/stackeye/charts/stackeye-worker
-```
 
-### ArgoCD Application Structure
+See [infrastructure/README.md](infrastructure/README.md) for detailed documentation.
 
-| Application | Cluster | Namespace |
-|-------------|---------|-----------|
-| stackeye-api-{env} | a1-ops-prd (local) | stackeye-{env} |
-| stackeye-worker-nyc3-{env} | stackeye-nyc3 (remote) | stackeye-{env} |
-| stackeye-worker-sfo3-{env} | stackeye-sfo3 (remote) | stackeye-{env} |
+## Deployment Model
+
+### Application Deployments (CI-Driven)
+
+Application deployments are handled via CI pipelines in each repo:
+
+| Repository | Trigger | Deploys |
+|------------|---------|---------|
+| `stackeye/` | Tag push (`v*`) | API + Worker via Helm |
+| `stackeye-web/` | Tag push (`v*`) | Web frontend via Helm |
+
+**Tag convention:**
+- `v0.1.0` → deploys to `stackeye-dev`
+- `v0.1.0-staging` → deploys to `stackeye-stg`
+- `v0.1.0-prod` → deploys to `stackeye-prd`
+
+### Infrastructure Deployments (Manual)
+
+Infrastructure is deployed manually using `scripts/deploy-infra.sh`:
+
+| Component | Cluster | Environments |
+|-----------|---------|--------------|
+| CNPG | onprem | dev, stg, prd |
+| Valkey | onprem | dev, stg, prd |
+| Monitoring | onprem | shared |
+| Tailscale | nyc3, sfo3 | shared |
+| Secrets | all | per-environment |
 
 ## Prerequisites
 
 - Kubernetes 1.28+
-- Helm 3.14+
-- [Sealed Secrets controller](https://github.com/bitnami-labs/sealed-secrets) installed
-- [cert-manager](https://cert-manager.io/) for TLS
-- nginx-ingress controller
-- Tailscale for worker → database connectivity
+- Helm 3.14+ (for app deployments)
+- kubectl access to all clusters
+- [Sealed Secrets controller](https://github.com/bitnami-labs/sealed-secrets)
+- [CloudNativePG operator](https://cloudnative-pg.io/)
+- Tailscale account and auth keys
 
-## Manual Chart Installation
+## Kubeconfig Setup
+
+Set these environment variables or use defaults:
 
 ```bash
-# Update dependencies first
-make deps
-
-# Deploy API (on-prem cluster)
-helm install stackeye-api charts/stackeye-api \
-  -f charts/stackeye-api/values.yaml \
-  -n stackeye --create-namespace
-
-# Deploy Worker (DOKS cluster - set region via values)
-helm install stackeye-worker charts/stackeye-worker \
-  -f charts/stackeye-worker/values.yaml \
-  --set worker.region=nyc3 \
-  --set worker.regionName="New York" \
-  -n stackeye --create-namespace
+export KUBECONFIG_ONPREM=~/.kube/config
+export KUBECONFIG_NYC3=~/.kube/mattox/stackeye-nyc3
+export KUBECONFIG_SFO3=~/.kube/mattox/stackeye-sfo3
 ```
 
 ## Secrets Management
 
-This deployment uses [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets) for secrets management.
+Secrets are managed via [Bitnami Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets).
 
-### Create a Sealed Secret
+### Create a New Sealed Secret
 
 ```bash
-# Install kubeseal CLI
-brew install kubeseal  # macOS
-
 # Create a secret manifest
-kubectl create secret generic stackeye-api-secrets \
-  --from-literal=DATABASE_URL='postgres://user:pass@100.x.x.x:5432/db' \
-  --from-literal=JWT_SECRET='your-32-char-minimum-secret-key' \
-  --from-literal=STRIPE_SECRET_KEY='sk_live_...' \
-  --from-literal=STRIPE_WEBHOOK_SECRET='whsec_...' \
-  --from-literal=EMAIL_API_KEY='re_...' \
+kubectl create secret generic my-secret \
+  --from-literal=KEY='value' \
   --dry-run=client -o yaml > secret.yaml
 
-# Seal it (requires access to cluster)
-kubeseal --format yaml < secret.yaml > sealedsecret.yaml
+# Seal it for the target cluster
+kubeseal --controller-name=sealed-secrets \
+         --controller-namespace=kube-system \
+         < secret.yaml > sealed-secret.yaml
+
+# Apply
+kubectl apply -f sealed-secret.yaml
 ```
 
-## Network Connectivity
-
-| Source | Destination | Method |
-|--------|-------------|--------|
-| Cloudflare Pages | API (a1-ops-prd) | Public HTTPS (api.stackeye.io) |
-| Workers (NYC3) | PostgreSQL (a1-ops-prd) | Tailscale VPN |
-| Workers (SFO3) | PostgreSQL (a1-ops-prd) | Tailscale VPN |
-| ArgoCD (a1-ops-prd) | DOKS clusters | ServiceAccount tokens |
-
-### Tailscale Setup for Workers
-
-Workers running on DOKS clusters connect to on-prem PostgreSQL and Valkey via Tailscale:
-
-1. Install Tailscale on DOKS nodes
-2. Configure DATABASE_URL to use Tailscale IP (100.x.x.x)
-3. Workers automatically connect via VPN
-
-## Development
-
-### Lint Charts
-
-```bash
-make lint
-```
-
-### Template Charts (Dry Run)
-
-```bash
-# Template API chart
-helm template stackeye-api charts/stackeye-api
-
-# Template Worker chart with region
-helm template stackeye-worker charts/stackeye-worker --set worker.region=nyc3
-```
-
-### Run Chart Tests
-
-```bash
-ct lint --config ct.yaml
-ct install --config ct.yaml
-```
-
-## CI/CD
-
-### GitHub Actions Workflows
-
-- **lint-charts.yml**: Runs on PRs, lints charts and runs install tests
-- **publish-charts.yml**: Runs on chart changes, publishes to Harbor OCI registry
-
-### Required Secrets
-
-Configure these in GitHub repository settings:
-
-- `HARBOR_USER`: Harbor registry username
-- `HARBOR_PASSWORD`: Harbor registry password
-
-## Dependencies
-
-Charts assume these exist externally:
-
-- **PostgreSQL** - Via [CloudNativePG](https://cloudnative-pg.io/) on a1-ops-prd
-- **Valkey** - Via Valkey operator on a1-ops-prd
-- **Sealed Secrets Controller** - Bitnami sealed-secrets in each cluster
-- **cert-manager** - For TLS certificate automation
-- **nginx-ingress** - Ingress controller
-- **Tailscale** - For cross-cluster network connectivity
+Sealed secrets are stored in `infrastructure/secrets/<cluster>/`.
 
 ## Related Repositories
 
 | Repository | Purpose |
 |------------|---------|
-| [stackeye](https://github.com/StackEye-IO/stackeye) | Backend API + Worker code |
-| [stackeye-web](https://github.com/StackEye-IO/stackeye-web) | Frontend (Cloudflare Pages) |
-| [stackeye-gitops](https://github.com/StackEye-IO/stackeye-gitops) | ArgoCD GitOps config |
+| [stackeye](https://github.com/StackEye-IO/stackeye) | Backend API + Worker (includes Helm charts) |
+| [stackeye-web](https://github.com/StackEye-IO/stackeye-web) | Frontend (includes Helm chart) |
+
+## Migration Notes
+
+This repository was previously named `stackeye-gitops` and used ArgoCD for deployments. As of January 2026:
+
+- **Application charts** moved to `stackeye/deploy/charts/` and `stackeye-web/deploy/charts/`
+- **Deployments** now triggered by CI pipelines on tag push
+- **Infrastructure** remains here, deployed via `scripts/deploy-infra.sh`
+- **ArgoCD** no longer used for StackEye deployments
 
 ## License
 
