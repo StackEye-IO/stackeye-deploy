@@ -28,6 +28,8 @@ data:
   EMAIL_FROM_EMAIL: {{ .Values.config.emailFromEmail | quote }}
   # Stripe settings
   STRIPE_ALLOWED_REDIRECT_DOMAINS: {{ .Values.config.stripeAllowedRedirectDomains | quote }}
+  # CORS settings
+  CORS_ALLOW_ORIGINS: {{ .Values.config.corsAllowOrigins | quote }}
   # Auth0 settings
   {{- if .Values.auth0.enabled }}
   AUTH0_ENABLED: "true"

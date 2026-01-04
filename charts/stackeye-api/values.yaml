@@ -159,6 +159,7 @@ config:
   emailFromName: "StackEye"
   emailFromEmail: "noreply@stackeye.io"
   stripeAllowedRedirectDomains: "stackeye.io,app.stackeye.io"
+  corsAllowOrigins: "*"
 
 # -- Sealed Secrets configuration
 # Create sealed secrets using: kubeseal --format yaml < secret.yaml > sealedsecret.yaml
