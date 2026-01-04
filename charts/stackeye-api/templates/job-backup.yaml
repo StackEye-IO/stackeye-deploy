@@ -1,0 +1,147 @@
+{{- if and .Values.migration.enabled .Values.migration.backup.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "stackeye-api.fullname" . }}-db-backup-{{ .Release.Revision }}
+  labels:
+    {{- include "stackeye-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+  annotations:
+    # Pre-upgrade hook runs before resources are updated
+    helm.sh/hook: pre-upgrade
+    # Weight -10 ensures backup runs BEFORE migration (which is weight -5)
+    helm.sh/hook-weight: "-10"
+    # Delete old jobs before creating new ones; keep failed jobs for debugging
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migration.backup.backoffLimit | default 2 }}
+  activeDeadlineSeconds: {{ .Values.migration.backup.activeDeadlineSeconds | default 600 }}
+  ttlSecondsAfterFinished: {{ .Values.migration.backup.ttlSecondsAfterFinished | default 3600 }}
+  template:
+    metadata:
+      labels:
+        {{- include "stackeye-api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backup
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "stackeye-api.serviceAccountName" . }}
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: backup-storage
+          persistentVolumeClaim:
+            claimName: {{ include "stackeye-api.fullname" . }}-db-backups
+        - name: tmp
+          emptyDir: {}
+      containers:
+        - name: backup
+          image: {{ .Values.migration.image.repository }}:{{ .Values.migration.image.tag | default .Chart.AppVersion }}
+          imagePullPolicy: {{ .Values.migration.image.pullPolicy | default "IfNotPresent" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65532
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecretName | default (printf "%s-secrets" (include "stackeye-api.fullname" .)) }}
+                  key: DATABASE_URL
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+
+              # Parse DATABASE_URL: postgres://user:pass@host:port/dbname?params
+              # Extract components using shell parameter expansion
+              DB_URL="$DATABASE_URL"
+
+              # Remove postgres:// prefix
+              DB_URL="${DB_URL#postgres://}"
+              DB_URL="${DB_URL#postgresql://}"
+
+              # Extract user:pass
+              USERPASS="${DB_URL%%@*}"
+              DB_USER="${USERPASS%%:*}"
+              DB_PASS="${USERPASS#*:}"
+
+              # Extract host:port/dbname
+              HOSTPART="${DB_URL#*@}"
+
+              # Extract host:port (before /)
+              HOSTPORT="${HOSTPART%%/*}"
+              DB_HOST="${HOSTPORT%%:*}"
+              DB_PORT="${HOSTPORT#*:}"
+
+              # Handle case where port is not specified
+              if [ "$DB_PORT" = "$DB_HOST" ]; then
+                DB_PORT="5432"
+              fi
+
+              # Extract dbname (after / and before ?)
+              DBPART="${HOSTPART#*/}"
+              DB_NAME="${DBPART%%\?*}"
+
+              # Set password for pg_dump
+              export PGPASSWORD="$DB_PASS"
+
+              # Create timestamped backup filename
+              BACKUP_FILE="/backups/stackeye-$(date +%Y%m%d-%H%M%S).sql.gz"
+
+              echo "=== Database Backup ==="
+              echo "Host: $DB_HOST"
+              echo "Port: $DB_PORT"
+              echo "Database: $DB_NAME"
+              echo "User: $DB_USER"
+              echo "Backup file: $BACKUP_FILE"
+              echo ""
+
+              echo "Creating backup..."
+              pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+                --no-owner --no-privileges --clean --if-exists | gzip > "$BACKUP_FILE"
+
+              echo "Backup completed successfully!"
+              ls -lh "$BACKUP_FILE"
+              echo ""
+
+              # Cleanup old backups (keep last N)
+              RETENTION={{ .Values.migration.backup.retention | default 5 }}
+              echo "Cleaning up old backups (keeping last $RETENTION)..."
+
+              # Count current backups
+              BACKUP_COUNT=$(ls -1 /backups/*.sql.gz 2>/dev/null | wc -l)
+              echo "Current backup count: $BACKUP_COUNT"
+
+              if [ "$BACKUP_COUNT" -gt "$RETENTION" ]; then
+                # Delete oldest backups beyond retention
+                ls -t /backups/*.sql.gz | tail -n +$((RETENTION + 1)) | while read OLD_BACKUP; do
+                  echo "Deleting old backup: $OLD_BACKUP"
+                  rm -f "$OLD_BACKUP"
+                done
+              fi
+
+              echo ""
+              echo "Current backups:"
+              ls -lht /backups/*.sql.gz 2>/dev/null || echo "No backups found"
+          volumeMounts:
+            - name: backup-storage
+              mountPath: /backups
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.migration.backup.resources | nindent 12 }}
+{{- end }}

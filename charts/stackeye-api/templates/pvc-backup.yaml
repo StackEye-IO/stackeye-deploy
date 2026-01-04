@@ -1,0 +1,18 @@
+{{- if and .Values.migration.enabled .Values.migration.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "stackeye-api.fullname" . }}-db-backups
+  labels:
+    {{- include "stackeye-api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.migration.backup.storageSize }}
+  {{- if .Values.migration.backup.storageClassName }}
+  storageClassName: {{ .Values.migration.backup.storageClassName }}
+  {{- end }}
+{{- end }}

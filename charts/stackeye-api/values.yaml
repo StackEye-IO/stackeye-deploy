@@ -200,3 +200,65 @@ serviceMonitor:
 
 # -- Graceful shutdown timeout
 terminationGracePeriodSeconds: 30
+
+# -- Database migration configuration
+migration:
+  # -- Enable automatic migrations on helm upgrade
+  enabled: true
+
+  # -- Migration image (separate from API image for security)
+  image:
+    repository: harbor.support.tools/stackeye-io/migrate
+    # -- Image tag (defaults to Chart.AppVersion)
+    tag: ""
+    pullPolicy: IfNotPresent
+
+  # -- Number of retry attempts for migration job
+  backoffLimit: 1
+
+  # -- Maximum time (seconds) for migration job to complete
+  activeDeadlineSeconds: 300
+
+  # -- Time (seconds) to keep completed/failed jobs for debugging
+  ttlSecondsAfterFinished: 3600
+
+  # -- Resource limits for migration job
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # -- Pre-migration backup configuration
+  backup:
+    # -- Enable database backup before migration
+    enabled: true
+
+    # -- PVC size for backup storage
+    storageSize: 5Gi
+
+    # -- Storage class for backup PVC (empty = cluster default)
+    storageClassName: ""
+
+    # -- Number of backups to retain
+    retention: 5
+
+    # -- Number of retry attempts for backup job
+    backoffLimit: 2
+
+    # -- Maximum time (seconds) for backup job to complete
+    activeDeadlineSeconds: 600
+
+    # -- Time (seconds) to keep completed/failed jobs for debugging
+    ttlSecondsAfterFinished: 3600
+
+    # -- Resource limits for backup job
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
