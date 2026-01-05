@@ -11,5 +11,11 @@ spec:
       targetPort: valkey
       protocol: TCP
       name: valkey
+    {{- if .Values.metrics.enabled }}
+    - port: 9121
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    {{- end }}
   selector:
     {{- include "stackeye-valkey.selectorLabels" . | nindent 4 }}

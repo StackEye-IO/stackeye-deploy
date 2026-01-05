@@ -1,0 +1,67 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+{{- /* Validate duration format: must be integer seconds with 's' suffix */ -}}
+{{- if not (regexMatch "^[0-9]+s$" .Values.metrics.serviceMonitor.interval) }}
+{{- fail (printf "metrics.serviceMonitor.interval (%s) must be integer seconds format (e.g., '30s', '60s')" .Values.metrics.serviceMonitor.interval) }}
+{{- end }}
+{{- if not (regexMatch "^[0-9]+s$" .Values.metrics.serviceMonitor.scrapeTimeout) }}
+{{- fail (printf "metrics.serviceMonitor.scrapeTimeout (%s) must be integer seconds format (e.g., '10s', '30s')" .Values.metrics.serviceMonitor.scrapeTimeout) }}
+{{- end }}
+{{- $interval := .Values.metrics.serviceMonitor.interval | trimSuffix "s" | int -}}
+{{- $scrapeTimeout := .Values.metrics.serviceMonitor.scrapeTimeout | trimSuffix "s" | int -}}
+{{- /* Validate minimum bounds: interval >= 10s, scrapeTimeout >= 1s */ -}}
+{{- if lt $interval 10 }}
+{{- fail (printf "metrics.serviceMonitor.interval (%s) must be at least 10s" .Values.metrics.serviceMonitor.interval) }}
+{{- end }}
+{{- if lt $scrapeTimeout 1 }}
+{{- fail (printf "metrics.serviceMonitor.scrapeTimeout (%s) must be at least 1s" .Values.metrics.serviceMonitor.scrapeTimeout) }}
+{{- end }}
+{{- if ge $scrapeTimeout $interval }}
+{{- fail (printf "metrics.serviceMonitor.scrapeTimeout (%s) must be less than interval (%s)" .Values.metrics.serviceMonitor.scrapeTimeout .Values.metrics.serviceMonitor.interval) }}
+{{- end }}
+{{- /* Validate scheme if provided */ -}}
+{{- if and .Values.metrics.serviceMonitor.scheme (not (regexMatch "^(http|https)$" .Values.metrics.serviceMonitor.scheme)) }}
+{{- fail (printf "metrics.serviceMonitor.scheme (%s) must be 'http' or 'https'" .Values.metrics.serviceMonitor.scheme) }}
+{{- end }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "stackeye-valkey.fullname" . }}
+  {{- if .Values.metrics.serviceMonitor.namespace }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  {{- end }}
+  labels:
+    {{- include "stackeye-valkey.labels" . | nindent 4 }}
+    {{- with .Values.metrics.serviceMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ .Values.metrics.serviceMonitor.scrapeTimeout }}
+      path: /metrics
+      {{- if .Values.metrics.serviceMonitor.scheme }}
+      scheme: {{ .Values.metrics.serviceMonitor.scheme }}
+      {{- end }}
+      {{- if .Values.metrics.serviceMonitor.honorLabels }}
+      honorLabels: {{ .Values.metrics.serviceMonitor.honorLabels }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.tlsConfig }}
+      tlsConfig:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.relabelings }}
+      relabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.metrics.serviceMonitor.metricRelabelings }}
+      metricRelabelings:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  selector:
+    matchLabels:
+      {{- include "stackeye-valkey.selectorLabels" . | nindent 6 }}
+{{- end }}

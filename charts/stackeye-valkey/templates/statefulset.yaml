@@ -65,7 +65,7 @@ spec:
                 {{- if .Values.auth.enabled }}
                 - sh
                 - -c
-                - valkey-cli -a "$VALKEY_PASSWORD" ping
+                - REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping
                 {{- else }}
                 - valkey-cli
                 - ping
@@ -83,7 +83,7 @@ spec:
                 {{- if .Values.auth.enabled }}
                 - sh
                 - -c
-                - valkey-cli -a "$VALKEY_PASSWORD" ping
+                - REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping
                 {{- else }}
                 - valkey-cli
                 - ping
@@ -105,6 +105,49 @@ spec:
               mountPath: /data
             - name: tmp
               mountPath: /tmp
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          image: "{{ .Values.metrics.image.repository }}:{{ .Values.metrics.image.tag }}"
+          imagePullPolicy: {{ .Values.metrics.image.pullPolicy }}
+          args:
+            - --redis.addr=redis://localhost:6379
+          {{- if .Values.auth.enabled }}
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.auth.existingSecret }}
+                  name: {{ .Values.auth.existingSecret }}
+                  {{- else }}
+                  name: {{ include "stackeye-valkey.fullname" . }}-auth
+                  {{- end }}
+                  key: {{ .Values.auth.passwordKey }}
+          {{- end }}
+          ports:
+            - name: metrics
+              containerPort: 9121
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: metrics
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.metrics.resources | nindent 12 }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}

@@ -120,3 +120,101 @@ networkPolicy:
         app.kubernetes.io/name: stackeye-worker
     - matchLabels:
         app.kubernetes.io/name: stackeye-controller
+  # Egress policy configuration (defense-in-depth)
+  # When enabled, restricts outbound connections from Valkey pods
+  egress:
+    # Enable egress restrictions (default: false for backward compatibility)
+    enabled: false
+    # Allow DNS queries to kube-dns/coredns (port 53 UDP/TCP)
+    # Required for Kubernetes service discovery
+    allowDNS: true
+    # Namespace where kube-dns/coredns runs (usually kube-system)
+    dnsNamespace: "kube-system"
+    # Additional custom egress rules (standard NetworkPolicyEgressRule objects)
+    # SECURITY: Each rule MUST specify 'to' and/or 'ports' - empty rules are rejected
+    # SECURITY: Rule with only 'to' allows all ports to those destinations
+    # SECURITY: Rule with only 'ports' allows those ports to all destinations
+    # Example: Allow outbound to specific external service
+    # customRules:
+    #   - to:
+    #       - ipBlock:
+    #           cidr: 10.0.0.0/8
+    #     ports:
+    #       - protocol: TCP
+    #         port: 443
+    customRules: []
+
+# Prometheus metrics configuration
+# Requires redis_exporter sidecar since Valkey doesn't expose native Prometheus metrics
+# NOTE: When networkPolicy.enabled=true, ensure Prometheus pods can reach port 9121
+# by adding appropriate selectors to networkPolicy.allowedSelectors or disabling NetworkPolicy
+metrics:
+  enabled: false
+  # redis_exporter sidecar image (supports Valkey 8.x/9.x)
+  image:
+    repository: oliver006/redis_exporter
+    tag: "v1.80.1"
+    pullPolicy: IfNotPresent
+  # Exporter container resource limits
+  resources:
+    limits:
+      cpu: 100m
+      memory: 64Mi
+    requests:
+      cpu: 10m
+      memory: 32Mi
+  # ServiceMonitor configuration (requires Prometheus Operator CRDs)
+  serviceMonitor:
+    enabled: false
+    # Additional labels for ServiceMonitor (e.g., for Prometheus selector)
+    additionalLabels: {}
+    # Namespace for ServiceMonitor (defaults to release namespace)
+    namespace: ""
+    # Scrape interval (must be greater than scrapeTimeout)
+    # Format: integer seconds with 's' suffix (e.g., "30s", "60s")
+    # Minimum: 10s
+    interval: "30s"
+    # Scrape timeout (must be less than interval)
+    # Format: integer seconds with 's' suffix (e.g., "10s", "15s")
+    # Minimum: 1s
+    scrapeTimeout: "10s"
+    # Scheme for scraping: "http" or "https" (empty = default to http)
+    scheme: ""
+    # TLS configuration for HTTPS endpoints
+    # NOTE: When scheme=https, configure tlsConfig or Prometheus will fail cert verification
+    # See: https://prometheus-operator.dev/docs/api-reference/api/#monitoring.coreos.com/v1.TLSConfig
+    tlsConfig: {}
+    # Example for self-signed certs:
+    # tlsConfig:
+    #   insecureSkipVerify: true
+    # Example with CA certificate:
+    # tlsConfig:
+    #   ca:
+    #     secret:
+    #       name: my-ca-cert
+    #       key: ca.crt
+    # Honor labels from the scraped target (preserves exporter labels over target labels)
+    # See: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#scrape_config
+    honorLabels: false
+    # Relabelings for metrics
+    relabelings: []
+    # Metric relabelings
+    metricRelabelings: []
+  # NetworkPolicy configuration for metrics scraping
+  # Only used when both metrics.enabled=true and networkPolicy.enabled=true
+  networkPolicy:
+    # NetworkPolicy 'from' entries for Prometheus to scrape port 9121
+    # NOTE: If empty and networkPolicy.enabled=true, metrics port is blocked
+    # NOTE: Each entry is a standard Kubernetes NetworkPolicyPeer object
+    allowedSelectors: []
+    # Example: Same-namespace Prometheus (pod selector only)
+    # - podSelector:
+    #     matchLabels:
+    #       app.kubernetes.io/name: prometheus
+    # Example: Cross-namespace Prometheus in 'monitoring' namespace
+    # - namespaceSelector:
+    #     matchLabels:
+    #       kubernetes.io/metadata.name: monitoring
+    #   podSelector:
+    #     matchLabels:
+    #       app.kubernetes.io/name: prometheus

@@ -17,7 +17,7 @@ Password is stored in secret: {{ include "stackeye-valkey.fullname" . }}-auth (k
 
 Example connection from a pod (with auth):
 
-  valkey-cli -h {{ include "stackeye-valkey.fullname" . }} -p {{ .Values.service.port }} -a <password>
+  REDISCLI_AUTH=<password> valkey-cli -h {{ include "stackeye-valkey.fullname" . }} -p {{ .Values.service.port }}
 
 Connection string format:
 
@@ -33,7 +33,7 @@ To get the password:
 
 To verify Valkey is running (with auth):
 
-  kubectl exec -it {{ include "stackeye-valkey.fullname" . }}-0 -n {{ .Release.Namespace }} -- sh -c 'valkey-cli -a "$VALKEY_PASSWORD" ping'
+  kubectl exec -it {{ include "stackeye-valkey.fullname" . }}-0 -n {{ .Release.Namespace }} -- sh -c 'REDISCLI_AUTH="$VALKEY_PASSWORD" valkey-cli ping'
 {{- else }}
 
 Example connection from a pod:

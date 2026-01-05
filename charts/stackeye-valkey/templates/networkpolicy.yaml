@@ -11,6 +11,9 @@ spec:
       {{- include "stackeye-valkey.selectorLabels" . | nindent 6 }}
   policyTypes:
     - Ingress
+    {{- if .Values.networkPolicy.egress.enabled }}
+    - Egress
+    {{- end }}
   ingress:
     - from:
         {{- if and .Values.networkPolicy.allowedSelectors (gt (len .Values.networkPolicy.allowedSelectors) 0) }}
@@ -29,4 +32,43 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.service.port }}
+    {{- if and .Values.metrics.enabled .Values.metrics.networkPolicy.allowedSelectors (gt (len .Values.metrics.networkPolicy.allowedSelectors) 0) }}
+    # Metrics port ingress for Prometheus scraping
+    - from:
+        {{- toYaml .Values.metrics.networkPolicy.allowedSelectors | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 9121
+    {{- end }}
+  {{- if .Values.networkPolicy.egress.enabled }}
+  {{- /* Validate customRules: reject empty rules that would allow all egress */ -}}
+  {{- range $idx, $rule := .Values.networkPolicy.egress.customRules }}
+  {{- if not (kindIs "map" $rule) }}
+  {{- fail (printf "networkPolicy.egress.customRules[%d] must be a valid NetworkPolicyEgressRule object" $idx) }}
+  {{- else }}
+  {{- $hasTo := and (hasKey $rule "to") $rule.to }}
+  {{- $hasPorts := and (hasKey $rule "ports") $rule.ports }}
+  {{- if not (or $hasTo $hasPorts) }}
+  {{- fail (printf "networkPolicy.egress.customRules[%d] is empty - empty rules allow all egress (security risk). Each rule must specify non-empty 'to' and/or 'ports'." $idx) }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  egress:
+    {{- if .Values.networkPolicy.egress.allowDNS }}
+    # Allow DNS queries to kube-dns/coredns
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.egress.dnsNamespace }}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- end }}
+    {{- with .Values.networkPolicy.egress.customRules }}
+    # Custom egress rules
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 {{- end }}
