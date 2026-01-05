@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "stackeye-valkey.fullname" . }}
+  labels:
+    {{- include "stackeye-valkey.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: valkey
+      protocol: TCP
+      name: valkey
+  selector:
+    {{- include "stackeye-valkey.selectorLabels" . | nindent 4 }}

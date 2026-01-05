@@ -1,0 +1,51 @@
+Valkey has been deployed to your cluster.
+
+To connect to Valkey from within the cluster:
+
+  Host: {{ include "stackeye-valkey.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  Port: {{ .Values.service.port }}
+
+{{- if .Values.auth.enabled }}
+
+Authentication is ENABLED.
+
+{{- if .Values.auth.existingSecret }}
+Password is stored in secret: {{ .Values.auth.existingSecret }} (key: {{ .Values.auth.passwordKey }})
+{{- else }}
+Password is stored in secret: {{ include "stackeye-valkey.fullname" . }}-auth (key: {{ .Values.auth.passwordKey }})
+{{- end }}
+
+Example connection from a pod (with auth):
+
+  valkey-cli -h {{ include "stackeye-valkey.fullname" . }} -p {{ .Values.service.port }} -a <password>
+
+Connection string format:
+
+  redis://:password@{{ include "stackeye-valkey.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+To get the password:
+
+{{- if .Values.auth.existingSecret }}
+  kubectl get secret {{ .Values.auth.existingSecret }} -n {{ .Release.Namespace }} -o jsonpath='{.data.{{ .Values.auth.passwordKey }}}' | base64 -d
+{{- else }}
+  kubectl get secret {{ include "stackeye-valkey.fullname" . }}-auth -n {{ .Release.Namespace }} -o jsonpath='{.data.{{ .Values.auth.passwordKey }}}' | base64 -d
+{{- end }}
+
+To verify Valkey is running (with auth):
+
+  kubectl exec -it {{ include "stackeye-valkey.fullname" . }}-0 -n {{ .Release.Namespace }} -- sh -c 'valkey-cli -a "$VALKEY_PASSWORD" ping'
+{{- else }}
+
+Example connection from a pod:
+
+  valkey-cli -h {{ include "stackeye-valkey.fullname" . }} -p {{ .Values.service.port }}
+
+To verify Valkey is running:
+
+  kubectl exec -it {{ include "stackeye-valkey.fullname" . }}-0 -n {{ .Release.Namespace }} -- valkey-cli ping
+{{- end }}
+
+{{- if not .Values.persistence.enabled }}
+
+WARNING: Persistence is disabled. Data will be lost on pod restart.
+{{- end }}

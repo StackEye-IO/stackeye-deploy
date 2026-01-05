@@ -1,0 +1,15 @@
+apiVersion: v2
+name: stackeye-valkey
+description: Local Valkey message queue for StackEye regional workers
+type: application
+version: 0.1.0
+appVersion: "8.0"
+keywords:
+  - valkey
+  - redis
+  - cache
+  - queue
+  - stackeye
+maintainers:
+  - name: StackEye Team
+    email: support@stackeye.io

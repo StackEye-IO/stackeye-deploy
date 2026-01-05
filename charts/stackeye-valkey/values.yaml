@@ -1,0 +1,122 @@
+# Default values for stackeye-valkey.
+# This is a YAML-formatted file.
+
+replicaCount: 1
+
+image:
+  repository: valkey/valkey
+  # Pin to specific minor version for reproducibility
+  tag: "8.0-alpine"
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 6379
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Valkey configuration
+valkey:
+  # Maximum memory limit for Valkey (set below container limit to prevent OOMKilled)
+  maxmemory: "480mb"
+  # Policy when maxmemory is reached (noeviction = fail writes, never lose data)
+  maxmemoryPolicy: "noeviction"
+  # Disable AOF for performance (RDB snapshots provide durability)
+  appendonly: "no"
+  # RDB snapshot: save after 60 seconds if at least 1000 keys changed
+  save: "60 1000"
+
+# Persistence configuration
+# WARNING: If persistence.enabled=false, data is stored in emptyDir and lost on pod restart
+persistence:
+  enabled: true
+  # DigitalOcean block storage class
+  storageClass: "do-block-storage"
+  size: 5Gi
+  accessMode: ReadWriteOnce
+
+# Security context for the pod
+podSecurityContext:
+  fsGroup: 1000
+
+# Security context for the container
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# Liveness probe configuration
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+  successThreshold: 1
+
+# Readiness probe configuration
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+  successThreshold: 1
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Pod annotations
+podAnnotations: {}
+
+# Service account
+serviceAccount:
+  create: false
+  name: ""
+
+# Authentication configuration
+# WARNING: Authentication is disabled by default for development simplicity
+# For production, enable auth and use existingSecret for GitOps workflows
+auth:
+  enabled: false
+  # Password for requirepass (only used if existingSecret is not set)
+  # SECURITY: For production, use existingSecret instead of inline password
+  password: ""
+  # Use existing secret for password (recommended for GitOps)
+  # Secret must have key specified by passwordKey
+  existingSecret: ""
+  # Key in secret containing the password
+  passwordKey: "password"
+
+# Network policy configuration
+# Restricts ingress to Valkey from only authorized stackeye components
+# NOTE: Requires CNI with NetworkPolicy support (Cilium, Calico)
+# NOTE: Only allows access from pods in the SAME namespace
+networkPolicy:
+  enabled: true
+  # Pod selectors allowed to access Valkey on port 6379
+  # Uses OR logic - any matching selector grants access
+  # WARNING: Each selector MUST have non-empty matchLabels
+  # WARNING: Empty matchLabels would allow ALL pods (security risk)
+  allowedSelectors:
+    - matchLabels:
+        app.kubernetes.io/name: stackeye-worker
+    - matchLabels:
+        app.kubernetes.io/name: stackeye-controller
