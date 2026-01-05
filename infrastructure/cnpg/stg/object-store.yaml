@@ -1,0 +1,44 @@
+# ObjectStore for StackEye Staging Environment
+# Defines backup storage configuration for the Barman Cloud Plugin
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: stackeye-backups
+  namespace: stackeye-stg
+  labels:
+    app.kubernetes.io/name: stackeye
+    app.kubernetes.io/component: backup
+    environment: stg
+spec:
+  configuration:
+    # Wasabi S3 destination for staging backups
+    destinationPath: s3://mattox-postgres-backups/a1-ops-prd/stackeye/staging
+    endpointURL: https://s3.us-central-1.wasabisys.com
+    # S3 credentials from existing secret
+    s3Credentials:
+      accessKeyId:
+        name: postgres-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: postgres-backup-credentials
+        key: SECRET_ACCESS_KEY
+    # Data backup configuration - higher parallelism for staging
+    data:
+      compression: gzip
+      immediateCheckpoint: true
+      jobs: 2
+    # WAL archive configuration
+    wal:
+      compression: gzip
+      maxParallel: 4
+  # 60-day retention for staging
+  retentionPolicy: "60d"
+  # Sidecar container configuration - more resources for staging
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 192Mi
+      limits:
+        cpu: 500m
+        memory: 384Mi

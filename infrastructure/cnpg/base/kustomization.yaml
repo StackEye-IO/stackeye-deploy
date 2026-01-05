@@ -5,3 +5,6 @@ resources:
   - namespace-dev.yaml
   - namespace-staging.yaml
   - namespace-prod.yaml
+  # Barman Cloud Plugin (prerequisite for plugin-based backups)
+  # Must be applied before ObjectStore resources in environment kustomizations
+  - barman-cloud-plugin.yaml

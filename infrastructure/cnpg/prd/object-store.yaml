@@ -1,0 +1,44 @@
+# ObjectStore for StackEye Production Environment
+# Defines backup storage configuration for the Barman Cloud Plugin
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: stackeye-backups
+  namespace: stackeye-prd
+  labels:
+    app.kubernetes.io/name: stackeye
+    app.kubernetes.io/component: backup
+    environment: prd
+spec:
+  configuration:
+    # Wasabi S3 destination for production backups
+    destinationPath: s3://mattox-postgres-backups/a1-ops-prd/stackeye/prod
+    endpointURL: https://s3.us-central-1.wasabisys.com
+    # S3 credentials from existing secret
+    s3Credentials:
+      accessKeyId:
+        name: postgres-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: postgres-backup-credentials
+        key: SECRET_ACCESS_KEY
+    # Data backup configuration - highest parallelism for production
+    data:
+      compression: gzip
+      immediateCheckpoint: true
+      jobs: 2
+    # WAL archive configuration - maximum parallel for production
+    wal:
+      compression: gzip
+      maxParallel: 8
+  # 90-day retention for production
+  retentionPolicy: "90d"
+  # Sidecar container configuration - production-grade resources
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi

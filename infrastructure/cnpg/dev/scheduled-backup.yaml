@@ -13,8 +13,10 @@ spec:
   # Reference the cluster
   cluster:
     name: stackeye-db
-  # Backup type: full base backup using Barman
-  method: barmanObjectStore
+  # Backup type: full base backup using Barman Cloud Plugin
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io
   # Don't run immediately on creation
   immediate: false
   # Enable scheduling

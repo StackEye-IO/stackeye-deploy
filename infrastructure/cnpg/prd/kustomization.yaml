@@ -5,6 +5,8 @@ namespace: stackeye-prd
 
 resources:
   - image-catalog.yaml
+  # ObjectStore must be created before cluster references it
+  - object-store.yaml
   - cluster.yaml
   - service-lb.yaml
   - service-tailscale.yaml

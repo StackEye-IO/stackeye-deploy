@@ -1,0 +1,44 @@
+# ObjectStore for StackEye Dev Environment
+# Defines backup storage configuration for the Barman Cloud Plugin
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: stackeye-backups
+  namespace: stackeye-dev
+  labels:
+    app.kubernetes.io/name: stackeye
+    app.kubernetes.io/component: backup
+    environment: dev
+spec:
+  configuration:
+    # Wasabi S3 destination for dev backups
+    destinationPath: s3://mattox-postgres-backups/a1-ops-prd/stackeye/dev
+    endpointURL: https://s3.us-central-1.wasabisys.com
+    # S3 credentials from existing secret
+    s3Credentials:
+      accessKeyId:
+        name: postgres-backup-credentials
+        key: ACCESS_KEY_ID
+      secretAccessKey:
+        name: postgres-backup-credentials
+        key: SECRET_ACCESS_KEY
+    # Data backup configuration
+    data:
+      compression: gzip
+      immediateCheckpoint: true
+      jobs: 1
+    # WAL archive configuration
+    wal:
+      compression: gzip
+      maxParallel: 2
+  # 30-day retention for dev
+  retentionPolicy: "30d"
+  # Sidecar container configuration
+  instanceSidecarConfiguration:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
