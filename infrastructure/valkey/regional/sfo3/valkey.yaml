@@ -1,0 +1,64 @@
+apiVersion: hyperspike.io/v1
+kind: Valkey
+metadata:
+  name: stackeye-valkey-regional
+  namespace: stackeye
+  labels:
+    app.kubernetes.io/name: stackeye
+    app.kubernetes.io/component: cache
+    app.kubernetes.io/part-of: stackeye-worker
+    stackeye.io/cluster: sfo3
+    stackeye.io/cluster-type: regional
+spec:
+  # Standalone mode - workers are the only consumers
+  nodes: 1
+  replicas: 0
+
+  # Valkey 8.0 image (consistent with on-prem)
+  image: valkey/valkey:8.0
+
+  # Authentication required for security
+  anonymousAuth: false
+
+  # Resource limits per task specification
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Storage for spillover (when memory >80%)
+  storage:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      resources:
+        requests:
+          storage: 5Gi
+      storageClassName: do-block-storage
+
+  # No TLS for internal cluster use
+  tls: false
+
+  # Cluster settings
+  clusterDomain: cluster.local
+  clusterPreferredEndpointType: ip
+  certIssuerType: ClusterIssuer
+
+  # No external access - cluster-local only
+  externalAccess:
+    enabled: false
+    type: Proxy
+    externalDNS: false
+    certIssuerType: ClusterIssuer
+
+  # Volume permissions fix for DO block storage
+  volumePermissions: true
+
+  # Monitoring disabled initially (can enable later)
+  prometheus: false
+  serviceMonitor: false

@@ -33,7 +33,7 @@ DRY_RUN=true ./scripts/deploy-infra.sh dev onprem all
 |----------|--------|-------------|
 | environment | `dev`, `stg`, `prd` | Target environment |
 | cluster | `onprem`, `nyc3`, `sfo3` | Target Kubernetes cluster |
-| component | `cnpg`, `valkey`, `monitoring`, `tailscale`, `secrets`, `all` | Component to deploy (default: all) |
+| component | `cnpg`, `valkey`, `valkey-regional`, `monitoring`, `tailscale`, `secrets`, `all` | Component to deploy (default: all) |
 
 ### Environment Variables
 
@@ -94,6 +94,32 @@ In-memory cache clusters using Valkey (Redis-compatible).
 **Directory**: `valkey/`
 - `dev/`, `stg/`, `prd/` - Environment-specific deployments
 
+### Valkey Regional - DOKS Clusters Only
+
+Local Valkey instances for regional probe workers. Uses the [hyperspike/valkey-operator](https://github.com/hyperspike/valkey-operator).
+
+| Cluster | Namespace | Service | Storage |
+|---------|-----------|---------|---------|
+| NYC3 | stackeye | `stackeye-valkey-regional.stackeye.svc:6379` | 5Gi |
+| SFO3 | stackeye | `stackeye-valkey-regional.stackeye.svc:6379` | 5Gi |
+
+**Directory**: `valkey/regional/`
+- `base/` - Namespace and operator installation
+- `base/operator/` - Valkey operator CRDs and controller
+- `nyc3/` - NYC3 Valkey instance
+- `sfo3/` - SFO3 Valkey instance
+
+**Deploy**:
+```bash
+# Deploy to NYC3
+./scripts/deploy-infra.sh dev nyc3 valkey-regional
+
+# Deploy to SFO3
+./scripts/deploy-infra.sh dev sfo3 valkey-regional
+```
+
+**Operator Version**: v0.0.61
+
 ### Monitoring - On-Prem Only
 
 Prometheus and Grafana stack for observability.
@@ -143,6 +169,10 @@ Secret files are named: `sealed-*-{env}.yaml` (e.g., `sealed-api-secrets-dev.yam
 │  ┌───────────┐  │                   │  ┌───────────┐  │
 │  │ Tailscale │  │                   │  │ Tailscale │  │
 │  │ Connector │  │                   │  │ Connector │  │
+│  └───────────┘  │                   │  └───────────┘  │
+│  ┌───────────┐  │                   │  ┌───────────┐  │
+│  │  Valkey   │  │                   │  │  Valkey   │  │
+│  │  (Local)  │  │                   │  │  (Local)  │  │
 │  └───────────┘  │                   │  └───────────┘  │
 │  ┌───────────┐  │                   │  ┌───────────┐  │
 │  │  Worker   │  │                   │  │  Worker   │  │
@@ -231,13 +261,34 @@ kubectl get pods -n stackeye-dev -l cnpg.io/cluster=stackeye-db
 kubectl exec -it stackeye-db-1 -n stackeye-dev -- psql -U postgres -c "\\dx"
 ```
 
-### Valkey
+### Valkey (On-Prem)
 ```bash
 # Check deployment
 kubectl get pods -n stackeye-dev -l app=valkey
 
 # Test connection
 kubectl exec -it deploy/valkey -n stackeye-dev -- redis-cli ping
+```
+
+### Valkey Regional (DOKS)
+```bash
+# Check operator is running
+kubectl get pods -n valkey-operator-system
+
+# Check Valkey CRD installed
+kubectl get crd | grep valkey
+
+# Check Valkey instance
+kubectl get valkey -n stackeye
+
+# Check Valkey pods
+kubectl get pods -n stackeye -l app.kubernetes.io/name=valkey
+
+# Check PVC bound
+kubectl get pvc -n stackeye
+
+# Test connection
+kubectl exec -it stackeye-valkey-regional-0 -n stackeye -- redis-cli ping
 ```
 
 ### Monitoring
@@ -281,13 +332,22 @@ kubectl get secrets -n stackeye-dev | grep stackeye
 
 Credentials are in the auto-generated secret `stackeye-db-app`.
 
-### Valkey (Redis)
+### Valkey (Redis) - On-Prem
 
 | Environment | Service | Port |
 |-------------|---------|------|
 | dev | `valkey.stackeye-dev.svc` | 6379 |
 | stg | `valkey.stackeye-stg.svc` | 6379 |
 | prd | `valkey.stackeye-prd.svc` | 6379 |
+
+### Valkey Regional - DOKS Clusters
+
+| Cluster | Service | Port |
+|---------|---------|------|
+| NYC3 | `stackeye-valkey-regional.stackeye.svc` | 6379 |
+| SFO3 | `stackeye-valkey-regional.stackeye.svc` | 6379 |
+
+Credentials are in the auto-generated secret `stackeye-valkey-regional`.
 
 ---
 
@@ -304,9 +364,14 @@ infrastructure/
 │   ├── prd/                     # Production cluster config
 │   └── secrets-template.yaml    # S3 backup credentials template
 ├── valkey/
-│   ├── dev/                     # Dev deployment
-│   ├── stg/                     # Staging deployment
-│   └── prd/                     # Production deployment
+│   ├── dev/                     # Dev deployment (on-prem)
+│   ├── stg/                     # Staging deployment (on-prem)
+│   ├── prd/                     # Production deployment (on-prem)
+│   └── regional/                # Regional DOKS deployments
+│       ├── base/                # Namespace and operator
+│       │   └── operator/        # Valkey operator v0.0.61
+│       ├── nyc3/                # NYC3 Valkey instance
+│       └── sfo3/                # SFO3 Valkey instance
 ├── monitoring/
 │   ├── base/                    # Shared resources
 │   ├── prometheus/              # Prometheus stack

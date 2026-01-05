@@ -13,7 +13,7 @@
 #
 # Environments: dev, stg, prd
 # Clusters: onprem, nyc3, sfo3
-# Components: cnpg, valkey, monitoring, tailscale, secrets, all
+# Components: cnpg, valkey, valkey-regional, monitoring, tailscale, secrets, all
 #
 
 set -euo pipefail
@@ -46,7 +46,7 @@ usage() {
     echo "  environment   Target environment: dev, stg, prd"
     echo "  cluster       Target cluster: onprem, nyc3, sfo3"
     echo "  component     Component to deploy (optional, default: all)"
-    echo "                Options: cnpg, valkey, monitoring, tailscale, secrets, all"
+    echo "                Options: cnpg, valkey, valkey-regional, monitoring, tailscale, secrets, all"
     echo ""
     echo "Examples:"
     echo "  $0 dev onprem              # Deploy all infra to dev on-prem"
@@ -102,7 +102,7 @@ validate_inputs() {
     esac
 
     case "$COMPONENT" in
-        cnpg|valkey|monitoring|tailscale|secrets|all) ;;
+        cnpg|valkey|valkey-regional|monitoring|tailscale|secrets|all) ;;
         *)
             log_error "Invalid component: $COMPONENT"
             exit 1
@@ -186,6 +186,65 @@ deploy_valkey() {
     log_info "Deploying Valkey to ${ENV}..."
     kube_apply "$valkey_dir/"
     log_success "Valkey deployed to ${ENV}"
+}
+
+# Deploy Valkey operator to regional clusters
+deploy_valkey_operator() {
+    if [[ "$CLUSTER" == "onprem" ]]; then
+        log_warn "Valkey operator is only deployed to regional clusters, skipping for on-prem"
+        return
+    fi
+
+    local operator_dir="${INFRA_DIR}/valkey/regional/base/operator"
+    if [[ ! -d "$operator_dir" ]]; then
+        log_error "Valkey operator directory not found: $operator_dir"
+        exit 1
+    fi
+
+    log_info "Deploying Valkey operator to ${CLUSTER}..."
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_info "[DRY-RUN] kubectl apply -k $operator_dir/"
+    else
+        kubectl apply -k "$operator_dir/"
+    fi
+
+    # Wait for operator to be ready
+    log_info "Waiting for Valkey operator to be ready..."
+    if [[ "${DRY_RUN:-false}" != "true" ]]; then
+        kubectl wait --for=condition=available --timeout=120s \
+            deployment/valkey-operator-controller-manager \
+            -n valkey-operator-system || log_warn "Operator may not be ready yet"
+    fi
+
+    log_success "Valkey operator deployed to ${CLUSTER}"
+}
+
+# Deploy regional Valkey instance (DOKS clusters only)
+deploy_valkey_regional() {
+    if [[ "$CLUSTER" == "onprem" ]]; then
+        log_warn "Regional Valkey is only deployed to DOKS clusters, skipping for on-prem"
+        return
+    fi
+
+    local regional_dir="${INFRA_DIR}/valkey/regional/${CLUSTER}"
+    if [[ ! -d "$regional_dir" ]]; then
+        log_error "Regional Valkey directory not found: $regional_dir"
+        exit 1
+    fi
+
+    # Ensure operator is installed first
+    deploy_valkey_operator
+
+    log_info "Deploying regional Valkey to ${CLUSTER}..."
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_info "[DRY-RUN] kubectl apply -k $regional_dir/"
+    else
+        kubectl apply -k "$regional_dir/"
+    fi
+
+    log_success "Regional Valkey deployed to ${CLUSTER}"
 }
 
 # Deploy Monitoring stack (on-prem only)
@@ -290,6 +349,7 @@ deploy_all() {
         deploy_monitoring
         deploy_secrets
     else
+        deploy_valkey_regional
         deploy_tailscale
         deploy_secrets
     fi
@@ -318,6 +378,9 @@ main() {
             ;;
         valkey)
             deploy_valkey
+            ;;
+        valkey-regional)
+            deploy_valkey_regional
             ;;
         monitoring)
             deploy_monitoring
